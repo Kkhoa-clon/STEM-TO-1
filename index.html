@@ -703,6 +703,9 @@ url:e,reason:"blocked_domain_not_allowlisted"},b.parentOrigin);throw new DOMExce
                 <button id="tab-cuongbuc" onclick="switchMode('cuongbuc')" class="tab-btn px-3 py-1.5 rounded-lg whitespace-nowrap text-slate-400 hover:text-slate-200 flex-1 sm:flex-initial text-center">
                     <i class="fa-solid fa-wave-square mr-1"></i> Cưỡng Bức &amp; Cộng Hưởng
                 </button>
+                <button id="tab-duytri" onclick="switchMode('duytri')" class="tab-btn px-3 py-1.5 rounded-lg whitespace-nowrap text-slate-400 hover:text-slate-200 flex-1 sm:flex-initial text-center">
+                    <i class="fa-solid fa-arrows-rotate mr-1"></i> Dao Động Duy Trì
+                </button>
             </div>
         </div>
     </header>
@@ -871,7 +874,7 @@ url:e,reason:"blocked_domain_not_allowlisted"},b.parentOrigin);throw new DOMExce
     <!-- Main Application Logic Script -->
     <script>
         // Global Simulation State
-        let currentMode = 'tonghop'; // 'tonghop', 'tatdan', 'cuongbuc'
+        let currentMode = 'tonghop'; // 'tonghop', 'tatdan', 'cuongbuc', 'duytri'
         let pendulumType = 'spring';  // 'spring' or 'simple'
         let isRunning = true;
         let timeSpeed = 1.0;
@@ -891,7 +894,10 @@ url:e,reason:"blocked_domain_not_allowlisted"},b.parentOrigin);throw new DOMExce
             gamma: 0.12,     // Damping factor
             omega0: 3,       // Natural angular frequency
             omegaD: 3.2,     // Driving angular frequency
-            F0: 5            // Driving force amplitude
+            F0: 5,           // Driving force amplitude
+            Amaintain: 5,    // Maintained oscillation amplitude (cm)
+            omegaMaintain: 3,// Maintained angular frequency (rad/s)
+            phiMaintain: 0   // Maintained initial phase (rad)
         };
 
         // Chart Data Buffers
@@ -977,6 +983,13 @@ url:e,reason:"blocked_domain_not_allowlisted"},b.parentOrigin);throw new DOMExce
                 wrapperComp.style.display = 'none';
                 coordX2.style.display = 'none';
                 chart2Title.innerText = 'Đồ Thị Li Độ Dao Động Cưỡng Bức x(t)';
+            }
+            else if (mode === 'duytri') {
+                badge.innerText = 'Dao Động Duy Trì';
+                legend.style.display = 'none';
+                wrapperComp.style.display = 'none';
+                coordX2.style.display = 'none';
+                chart2Title.innerText = 'Đồ Thị Li Độ Dao Động Duy Trì x(t)';
             }
 
             resetSim();
@@ -1110,6 +1123,30 @@ url:e,reason:"blocked_domain_not_allowlisted"},b.parentOrigin);throw new DOMExce
                 `;
             }
 
+            else if (currentMode === 'duytri') {
+                html = `
+                    <div class="space-y-3 bg-slate-900/60 p-3 rounded-xl border border-slate-800">
+                        <div class="font-semibold text-emerald-400">Thông Số Dao Động Duy Trì</div>
+                        <p class="text-slate-400 leading-relaxed">Hệ được bù năng lượng để duy trì biên độ không đổi, lý tưởng hóa bỏ qua sai số và giới hạn nguồn bù.</p>
+                        <div>
+                            <div class="flex justify-between text-slate-400"><span>Biên độ duy trì $A$:</span><strong class="text-emerald-300">${params.Amaintain} cm</strong></div>
+                            <input type="range" min="0.1" max="100" step="0.1" value="${params.Amaintain}" oninput="updateVal('Amaintain', this.value)" class="w-full accent-emerald-400">
+                            <div class="flex justify-between text-slate-500"><span>0,1 cm</span><span>100 cm</span></div>
+                        </div>
+                        <div>
+                            <div class="flex justify-between text-slate-400"><span>Tần số góc $\\omega$:</span><strong class="text-cyan-300">${params.omegaMaintain} rad/s</strong></div>
+                            <input type="range" min="0.1" max="100" step="0.1" value="${params.omegaMaintain}" oninput="updateVal('omegaMaintain', this.value)" class="w-full accent-cyan-400">
+                            <div class="flex justify-between text-slate-500"><span>0,1 rad/s</span><span>100 rad/s</span></div>
+                        </div>
+                        <div>
+                            <div class="flex justify-between text-slate-400"><span>Pha ban đầu $\\varphi_0$:</span><strong class="text-amber-300">${(params.phiMaintain).toFixed(3)} rad</strong></div>
+                            <input type="range" min="-100" max="100" step="0.1" value="${params.phiMaintain}" oninput="updateVal('phiMaintain', this.value)" class="w-full accent-amber-400">
+                            <div class="flex justify-between text-slate-500"><span>-100 rad</span><span>100 rad</span></div>
+                        </div>
+                    </div>
+                `;
+            }
+
             container.innerHTML = html;
             triggerMathJax(container);
         }
@@ -1136,8 +1173,10 @@ url:e,reason:"blocked_domain_not_allowlisted"},b.parentOrigin);throw new DOMExce
                 let displayValue;
                 if (displayKey === 'A1' || displayKey === 'A2') {
                     displayValue = `${params[displayKey]} cm`;
-                } else if (['omega1', 'omega0', 'omegaD', 'omega_all'].includes(displayKey)) {
+                } else if (['omega1', 'omega0', 'omegaD', 'omega_all', 'omegaMaintain'].includes(displayKey)) {
                     displayValue = `${displayKey === 'omega_all' ? params.omega1 : params[displayKey]} rad/s`;
+                } else if (displayKey === 'phiMaintain') {
+                    displayValue = `${params[displayKey].toFixed(3)} rad`;
                 } else if (displayKey === 'phi1' || displayKey === 'phi2') {
                     displayValue = `${Math.round(params[displayKey] * 180 / Math.PI)}°`;
                 } else {
@@ -1217,6 +1256,18 @@ url:e,reason:"blocked_domain_not_allowlisted"},b.parentOrigin);throw new DOMExce
                         <p>• Ngoại lực cưỡng bức $F = F_0 \\cos(\\Omega t)$.</p>
                         <p>• Biên độ $A$ phụ thuộc độ chênh lệch $|\\Omega - \\omega_0|$ và lực cản.</p>
                         <p class="text-amber-300 font-bold">• Hiện tượng cộng hưởng: $\\Omega = \\omega_0 \\implies A = A_{\\max}$</p>
+                    </div>
+                `;
+            }
+
+            else if (currentMode === 'duytri') {
+                html += `
+                    <div class="bg-slate-900/60 p-3 rounded-xl border border-slate-800 space-y-1">
+                        <p class="font-semibold text-emerald-400 text-xs">4. Dao Động Duy Trì</p>
+                        <p>• Phương trình lý tưởng: $x(t)=A\\cos(\\omega t+\\varphi_0)$.</p>
+                        <p>• Biên độ được duy trì không đổi: $A(t)=A$.</p>
+                        <p>• Chu kỳ: $T=\\frac{2\\pi}{\\omega}$; tần số: $f=\\frac{\\omega}{2\\pi}$.</p>
+                        <p>• Hệ nhận năng lượng bù phần năng lượng mất do lực cản; trong mô hình lý tưởng, sự bù năng lượng giữ biên độ ổn định.</p>
                     </div>
                 `;
             }
@@ -1318,6 +1369,13 @@ url:e,reason:"blocked_domain_not_allowlisted"},b.parentOrigin);throw new DOMExce
                 xTotal = Amp * Math.cos(params.omegaD * time);
                 x1 = xTotal;
                 A1_eff = Amp;
+            }
+            else if (currentMode === 'duytri') {
+                // Ideal sustained oscillation: supplied energy compensates losses,
+                // so amplitude remains constant rather than decaying exponentially.
+                xTotal = params.Amaintain * Math.cos(params.omegaMaintain * time + params.phiMaintain);
+                x1 = xTotal;
+                A1_eff = params.Amaintain;
             }
 
             return { x1, x2, xTotal, A1_eff, A2_eff };
