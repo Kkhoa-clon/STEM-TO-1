@@ -928,12 +928,12 @@ url:e,reason:"blocked_domain_not_allowlisted"},b.parentOrigin);throw new DOMExce
             if (!pCanvas || !fCanvas) return;
 
             const pRect = pCanvas.parentElement.getBoundingClientRect();
-            pCanvas.width = pRect.width * window.devicePixelRatio;
-            pCanvas.height = pRect.height * window.devicePixelRatio;
+            pCanvas.width = Math.max(1, Math.round(pRect.width * (window.devicePixelRatio || 1)));
+            pCanvas.height = Math.max(1, Math.round(pRect.height * (window.devicePixelRatio || 1)));
 
             const fRect = fCanvas.parentElement.getBoundingClientRect();
-            fCanvas.width = fRect.width * window.devicePixelRatio;
-            fCanvas.height = fRect.height * window.devicePixelRatio;
+            fCanvas.width = Math.max(1, Math.round(fRect.width * (window.devicePixelRatio || 1)));
+            fCanvas.height = Math.max(1, Math.round(fRect.height * (window.devicePixelRatio || 1)));
         }
 
         function onWindowResize() {
@@ -1096,15 +1096,15 @@ url:e,reason:"blocked_domain_not_allowlisted"},b.parentOrigin);throw new DOMExce
                         <div class="font-semibold text-purple-400">Thông Số Ngoại Lực Cưỡng Bức</div>
                         <div>
                             <div class="flex justify-between text-slate-400"><span>Tần số riêng hệ $\\omega_0$:</span><strong class="text-purple-300">${params.omega0} rad/s</strong></div>
-                            <input type="range" min="1" max="6" step="0.1" value="${params.omega0}" oninput="updateVal('omega0', this.value)" class="w-full accent-purple-400">
+                            <input type="range" min="1" max="100" step="1" value="${params.omega0}" oninput="updateVal('omega0', this.value)" class="w-full accent-purple-400">
                         </div>
                         <div>
                             <div class="flex justify-between text-slate-400"><span>Tần số ngoại lực $\\Omega$:</span><strong class="text-amber-300 font-bold">${params.omegaD} rad/s</strong></div>
-                            <input type="range" min="0.5" max="7" step="0.1" value="${params.omegaD}" oninput="updateVal('omegaD', this.value)" class="w-full accent-amber-400">
+                            <input type="range" min="0.5" max="100" step="1" value="${params.omegaD}" oninput="updateVal('omegaD', this.value)" class="w-full accent-amber-400">
                         </div>
                         <div>
                             <div class="flex justify-between text-slate-400"><span>Biên độ ngoại lực $F_0$:</span><strong class="text-slate-200">${params.F0}</strong></div>
-                            <input type="range" min="1" max="10" step="0.5" value="${params.F0}" oninput="updateVal('F0', this.value)" class="w-full accent-purple-400">
+                            <input type="range" min="1" max="100" step="5" value="${params.F0}" oninput="updateVal('F0', this.value)" class="w-full accent-purple-400">
                         </div>
                     </div>
                 `;
@@ -1115,14 +1115,53 @@ url:e,reason:"blocked_domain_not_allowlisted"},b.parentOrigin);throw new DOMExce
         }
 
         function updateVal(key, value) {
-            value = parseFloat(value);
+            value = Number.parseFloat(value);
+            if (!Number.isFinite(value)) return;
+
             if (key === 'omega_all') {
                 params.omega1 = value;
                 params.omega2 = value;
             } else {
                 params[key] = value;
             }
-            renderControls();
+
+            // Keep the active slider mounted while dragging. Re-rendering the
+            // whole controls panel on every input event interrupts pointer capture.
+            const input = document.activeElement;
+            const valueLabel = input && input.parentElement
+                ? input.parentElement.querySelector('strong')
+                : null;
+            if (valueLabel) {
+                const displayKey = key === 'omega_all' ? 'omega_all' : key;
+                let displayValue;
+                if (displayKey === 'A1' || displayKey === 'A2') {
+                    displayValue = `${params[displayKey]} cm`;
+                } else if (['omega1', 'omega0', 'omegaD', 'omega_all'].includes(displayKey)) {
+                    displayValue = `${displayKey === 'omega_all' ? params.omega1 : params[displayKey]} rad/s`;
+                } else if (displayKey === 'phi1' || displayKey === 'phi2') {
+                    displayValue = `${Math.round(params[displayKey] * 180 / Math.PI)}°`;
+                } else {
+                    displayValue = String(params[displayKey]);
+                }
+                valueLabel.textContent = displayValue;
+            }
+
+            // Old graph samples were calculated with previous parameters;
+            // clear them so the plot never mixes incompatible configurations.
+            historyT = [];
+            historyX1 = [];
+            historyX2 = [];
+            historyX = [];
+            if (chartComp) {
+                chartComp.data.labels = [];
+                chartComp.data.datasets.forEach(dataset => dataset.data = []);
+                chartComp.update('none');
+            }
+            if (chartRes) {
+                chartRes.data.labels = [];
+                chartRes.data.datasets.forEach(dataset => dataset.data = []);
+                chartRes.update('none');
+            }
         }
 
         // Render Theory Section
@@ -1528,12 +1567,32 @@ url:e,reason:"blocked_domain_not_allowlisted"},b.parentOrigin);throw new DOMExce
 
         function resetSim() {
             t = 0;
+            lastTime = 0;
             historyT = [];
             historyX1 = [];
             historyX2 = [];
             historyX = [];
-            if (chartComp) chartComp.resetZoom();
-            if (chartRes) chartRes.resetZoom();
+
+            if (chartComp) {
+                chartComp.data.labels = [];
+                chartComp.data.datasets.forEach(dataset => dataset.data = []);
+                chartComp.resetZoom();
+                chartComp.update('none');
+            }
+            if (chartRes) {
+                chartRes.data.labels = [];
+                chartRes.data.datasets.forEach(dataset => dataset.data = []);
+                chartRes.resetZoom();
+                chartRes.update('none');
+            }
+
+            // Reset should return to a predictable baseline without changing
+            // whether the user had intentionally paused the simulation.
+            document.getElementById('lbl-time').innerText = '0.00';
+            const initial = computeState(0);
+            document.getElementById('lbl-x1').innerText = initial.x1.toFixed(2);
+            document.getElementById('lbl-x2').innerText = initial.x2.toFixed(2);
+            document.getElementById('lbl-x').innerText = initial.xTotal.toFixed(2);
         }
     </script>
 
